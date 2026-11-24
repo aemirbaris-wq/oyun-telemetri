@@ -66,20 +66,59 @@ namespace Platformer.Mechanics
             if (controlEnabled)
             {
                 move.x = m_MoveAction.ReadValue<Vector2>().x;
-                if (jumpState == JumpState.Grounded && m_JumpAction.WasPressedThisFrame())
-                    jumpState = JumpState.PrepareToJump;
-                else if (m_JumpAction.WasReleasedThisFrame())
-                {
-                    stopJump = true;
-                    Schedule<PlayerStopJump>().player = this;
-                }
+                GuncelleZiplaTamponu();
             }
             else
             {
                 move.x = 0;
             }
             UpdateJumpState();
+            GuncelleZiplaTamponu();
             base.Update();
+        }
+
+        private float sonYerdeOlmaZamani = -10f;
+        private float sonZiplaIstekZamani = -10f;
+        private bool asagiHizliInisAktif = false;
+
+        private void GuncelleZiplaTamponu()
+        {
+            if (IsGrounded || jumpState == JumpState.Grounded)
+            {
+                sonYerdeOlmaZamani = Time.time;
+            }
+
+            if (Time.time - sonZiplaIstekZamani <= 0.13f)
+            {
+                bool coyoteAktif = (Time.time - sonYerdeOlmaZamani) <= 0.11f;
+                if (jumpState == JumpState.Grounded || (IsGrounded && jumpState == JumpState.Landed) || (coyoteAktif && velocity.y <= 0.05f && jumpState != JumpState.Jumping && jumpState != JumpState.InFlight))
+                {
+                    sonZiplaIstekZamani = -10f;
+                    sonYerdeOlmaZamani = -10f;
+                    jumpState = JumpState.PrepareToJump;
+                    stopJump = false;
+                }
+            }
+        }
+
+        public void TetikleZiplaHarici()
+        {
+            sonZiplaIstekZamani = Time.time;
+            GuncelleZiplaTamponu();
+        }
+
+        public void DurdurZiplaHarici()
+        {
+            if (!IsGrounded && velocity.y > 0f)
+            {
+                stopJump = true;
+                Schedule<PlayerStopJump>().player = this;
+            }
+        }
+
+        public void UygulaAsagiOkEtkisi(bool asagiBasili)
+        {
+            asagiHizliInisAktif = (!IsGrounded && asagiBasili);
         }
 
         void UpdateJumpState()
@@ -102,7 +141,6 @@ namespace Platformer.Mechanics
                 case JumpState.InFlight:
                     if (IsGrounded)
                     {
-                        Schedule<PlayerLanded>().player = this;
                         jumpState = JumpState.Landed;
                     }
                     break;
@@ -116,15 +154,29 @@ namespace Platformer.Mechanics
         {
             if (jump && IsGrounded)
             {
-                velocity.y = jumpTakeOffSpeed * model.jumpModifier;
+                float mod = model != null ? model.jumpModifier : 1f;
+                velocity.y = jumpTakeOffSpeed * mod;
                 jump = false;
             }
             else if (stopJump)
             {
                 stopJump = false;
-                if (velocity.y > 0)
+                if (velocity.y > 0f)
                 {
-                    velocity.y = velocity.y * model.jumpDeceleration;
+                    float decel = model != null ? model.jumpDeceleration : 0.5f;
+                    velocity.y = velocity.y * decel;
+                }
+            }
+
+            // Dogal ve tok inis yercekimi (havada asili kalmayi onler, animasyonu bozmaz)
+            if (!IsGrounded && velocity.y < 0f)
+            {
+                float ekYercekimi = asagiHizliInisAktif ? 1.15f : 0.55f;
+                float maksDususHizi = asagiHizliInisAktif ? -15f : -12f;
+                velocity.y += Physics2D.gravity.y * ekYercekimi * Time.deltaTime;
+                if (velocity.y < maksDususHizi)
+                {
+                    velocity.y = maksDususHizi;
                 }
             }
 
@@ -136,7 +188,9 @@ namespace Platformer.Mechanics
             animator.SetBool("grounded", IsGrounded);
             animator.SetFloat("velocityX", Mathf.Abs(velocity.x) / maxSpeed);
 
-            targetVelocity = move * maxSpeed;
+            // Havadayken sag/sol ok basiliysa bosluklari dash'siz gecebilmek icin akici yatay kavis
+            float yatayCarpan = (!IsGrounded && Mathf.Abs(move.x) > 0.1f) ? 1.28f : 1f;
+            targetVelocity = new Vector2(move.x * maxSpeed * yatayCarpan, 0f);
         }
 
         public enum JumpState
@@ -149,3 +203,4 @@ namespace Platformer.Mechanics
         }
     }
 }
+

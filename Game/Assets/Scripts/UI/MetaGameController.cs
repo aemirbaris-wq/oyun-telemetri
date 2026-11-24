@@ -1,29 +1,14 @@
-using Platformer.Mechanics;
+﻿using Platformer.Mechanics;
 using Platformer.UI;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace Platformer.UI
 {
-    /// <summary>
-    /// The MetaGameController is responsible for switching control between the high level
-    /// contexts of the application, eg the Main Menu and Gameplay systems.
-    /// </summary>
     public class MetaGameController : MonoBehaviour
     {
-        /// <summary>
-        /// The main UI object which used for the menu.
-        /// </summary>
         public MainUIController mainMenu;
-
-        /// <summary>
-        /// A list of canvas objects which are used during gameplay (when the main ui is turned off)
-        /// </summary>
         public Canvas[] gamePlayCanvasii;
-
-        /// <summary>
-        /// The game controller.
-        /// </summary>
         public GameController gameController;
 
         bool showMainCanvas = false;
@@ -35,10 +20,6 @@ namespace Platformer.UI
             m_MenuAction = InputSystem.actions.FindAction("Player/Menu");
         }
 
-        /// <summary>
-        /// Turn the main menu on or off.
-        /// </summary>
-        /// <param name="show"></param>
         public void ToggleMainMenu(bool show)
         {
             if (this.showMainCanvas != show)
@@ -54,6 +35,7 @@ namespace Platformer.UI
                 Time.timeScale = 0;
                 mainMenu.gameObject.SetActive(true);
                 foreach (var i in gamePlayCanvasii) i.gameObject.SetActive(false);
+                Telemetri.OlayKaydet("duraklat", Telemetri.AktifBolum);
             }
             else
             {
@@ -71,6 +53,5 @@ namespace Platformer.UI
                 ToggleMainMenu(show: !showMainCanvas);
             }
         }
-
     }
 }

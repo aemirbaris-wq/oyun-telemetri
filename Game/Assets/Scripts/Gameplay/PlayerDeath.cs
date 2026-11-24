@@ -6,10 +6,6 @@ using UnityEngine;
 
 namespace Platformer.Gameplay
 {
-    /// <summary>
-    /// Fired when the player has died.
-    /// </summary>
-    /// <typeparam name="PlayerDeath"></typeparam>
     public class PlayerDeath : Simulation.Event<PlayerDeath>
     {
         PlatformerModel model = Simulation.GetModel<PlatformerModel>();
@@ -19,10 +15,17 @@ namespace Platformer.Gameplay
             var player = model.player;
             if (player.health.IsAlive)
             {
+                Telemetri.OlayKaydet(
+                    "olum",
+                    Telemetri.AktifBolum,
+                    player.transform.position.x,
+                    player.transform.position.y,
+                    Telemetri.SonOlumNedeniTuket()
+                );
+
                 player.health.Die();
                 model.virtualCamera.Follow = null;
                 model.virtualCamera.LookAt = null;
-                // player.collider.enabled = false;
                 player.controlEnabled = false;
 
                 if (player.audioSource && player.ouchAudio)

@@ -1,13 +1,10 @@
-using Platformer.Core;
+﻿using Platformer.Core;
 using Platformer.Mechanics;
 using Platformer.Model;
+using UnityEngine;
 
 namespace Platformer.Gameplay
 {
-    /// <summary>
-    /// Fired when a player enters a trigger with a DeathZone component.
-    /// </summary>
-    /// <typeparam name="PlayerEnteredDeathZone"></typeparam>
     public class PlayerEnteredDeathZone : Simulation.Event<PlayerEnteredDeathZone>
     {
         public DeathZone deathzone;
@@ -16,6 +13,20 @@ namespace Platformer.Gameplay
 
         public override void Execute()
         {
+            string nesneAdi = deathzone != null ? deathzone.gameObject.name.ToLowerInvariant() : "";
+            string ustAdi = (deathzone != null && deathzone.transform.parent != null)
+                ? deathzone.transform.parent.name.ToLowerInvariant()
+                : "";
+
+            if (nesneAdi.Contains("diken") || nesneAdi.Contains("spike") || ustAdi.Contains("diken") || ustAdi.Contains("spike"))
+            {
+                Telemetri.SonOlumNedeniAta("diken");
+            }
+            else
+            {
+                Telemetri.SonOlumNedeniAta("cukur");
+            }
+
             Simulation.Schedule<PlayerDeath>(0);
         }
     }

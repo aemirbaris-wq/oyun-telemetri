@@ -1,14 +1,10 @@
-using Platformer.Core;
+﻿using Platformer.Core;
 using Platformer.Mechanics;
 using Platformer.Model;
+using UnityEngine;
 
 namespace Platformer.Gameplay
 {
-
-    /// <summary>
-    /// This event is triggered when the player character enters a trigger with a VictoryZone component.
-    /// </summary>
-    /// <typeparam name="PlayerEnteredVictoryZone"></typeparam>
     public class PlayerEnteredVictoryZone : Simulation.Event<PlayerEnteredVictoryZone>
     {
         public VictoryZone victoryZone;
@@ -19,6 +15,14 @@ namespace Platformer.Gameplay
         {
             model.player.animator.SetTrigger("victory");
             model.player.controlEnabled = false;
+
+            int bolum = Telemetri.AktifBolum;
+            Telemetri.OlayKaydet("bolum_bitir", bolum);
+            if (bolum >= 6)
+            {
+                Telemetri.OlayKaydet("oyun_bitir", 6);
+            }
+            Telemetri.BolumSonuGecisiBaslat();
         }
     }
 }
