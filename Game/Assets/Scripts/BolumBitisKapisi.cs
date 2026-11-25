@@ -1,32 +1,45 @@
-﻿using Platformer.Mechanics;
+﻿using System.Collections;
+using Platformer.Mechanics;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 
 public class BolumBitisKapisi : MonoBehaviour
 {
     public int bolumNo = 1;
-    public float tetiklemeYaricapi = 1.65f;
 
     private bool tamamlandi = false;
-    private float baslangicZamani;
+    private bool gizliSonAktif = false;
     private PlayerController oyuncu;
-    private GameObject bitisCanvas;
+    private BoxCollider2D boxCol;
 
-    private void Start()
+    private static readonly string[] GunahAdlariTr =
     {
-        baslangicZamani = Time.time;
+        "OBURLUK", "TEMBELLİK", "ŞEHVET", "AÇGÖZLÜLÜK", "KİBİR", "KISKANÇLIK", "ÖFKE"
+    };
+
+    private static readonly string[] GunahAdlariEn =
+    {
+        "GLUTTONY", "SLOTH", "LUST", "GREED", "PRIDE", "ENVY", "WRATH"
+    };
+
+    private void Awake()
+    {
+        // Eski microgame VictoryZone cakismasini devre disi birak
+        VictoryZone eskiVictory = GetComponent<VictoryZone>();
+        if (eskiVictory != null) eskiVictory.enabled = false;
+
+        boxCol = GetComponent<BoxCollider2D>();
+        if (boxCol == null) boxCol = gameObject.AddComponent<BoxCollider2D>();
+        boxCol.isTrigger = true;
     }
 
     private void Update()
     {
         if (tamamlandi)
         {
-            Keyboard klavye = Keyboard.current;
-            if (klavye != null && (klavye.enterKey.wasPressedThisFrame || klavye.spaceKey.wasPressedThisFrame))
+            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space))
             {
-                SonrakiBolumeGec();
+                SonrakiSahneyeGec();
             }
             return;
         }
@@ -39,8 +52,10 @@ public class BolumBitisKapisi : MonoBehaviour
 
         if (!oyuncu.isActiveAndEnabled) return;
 
-        Vector3 kapiMerkez = transform.position + new Vector3(0f, 1.2f, 0f);
-        if (Vector2.Distance(kapiMerkez, oyuncu.transform.position) <= tetiklemeYaricapi)
+        bool icinde = (boxCol != null && boxCol.bounds.Contains(oyuncu.transform.position)) ||
+                      Vector2.Distance(oyuncu.transform.position, transform.position + Vector3.up * 1.2f) <= 1.85f;
+
+        if (icinde)
         {
             BolumuTamamla();
         }
@@ -49,172 +64,135 @@ public class BolumBitisKapisi : MonoBehaviour
     private void OnTriggerEnter2D(Collider2D other)
     {
         if (tamamlandi) return;
-        PlayerController pc = other.GetComponentInParent<PlayerController>();
-        if (pc != null)
+        if (other.GetComponentInParent<PlayerController>() != null)
         {
-            oyuncu = pc;
             BolumuTamamla();
         }
     }
 
     private void BolumuTamamla()
     {
-        if (tamamlandi) return;
         tamamlandi = true;
 
         if (oyuncu != null)
         {
             oyuncu.controlEnabled = false;
-            oyuncu.velocity = Vector2.zero;
         }
 
-        Telemetri.OlayKaydet("bolum_tamamla", Telemetri.AktifBolum);
-
-        if (SesYoneticisi.Ornek != null)
+        if (KoleksiyonYoneticisi.Ornek != null)
         {
-            SesYoneticisi.Ornek.SendMessage("ErdemSunagiCal", SendMessageOptions.DontRequireReceiver);
+            KoleksiyonYoneticisi.Ornek.IlerlemeyiKaydet();
         }
 
-        BitisEkraniniAc();
-    }
-
-    private bool IngilizceMi()
-    {
-        if (DilYoneticisi.Ornek != null)
+        // Secret Ending SADECE 7. bolumun sonunda ve 7/7 tam koleksiyon varsa acilir
+        if (bolumNo >= 7)
         {
-            return DilYoneticisi.Ornek.Metin("pause_devam") == "RESUME";
+            gizliSonAktif = KoleksiyonYoneticisi.TumOyunTamKoleksiyonMu();
         }
-        return false;
+
+        if (TematikSesYoneticisi.Ornek != null)
+        {
+            TematikSesYoneticisi.Ornek.BolumBitisSesiCal();
+        }
+
+        Telemetri.OlayKaydet(gizliSonAktif ? "secret_ending" : "bolum_tamam", bolumNo);
+
+        if (bolumNo < 7)
+        {
+            StartCoroutine(OtomatikGecisSayaci());
+        }
     }
 
-    private void BitisEkraniniAc()
+    private IEnumerator OtomatikGecisSayaci()
     {
-        if (bitisCanvas != null) Destroy(bitisCanvas);
-
-        bitisCanvas = new GameObject("BolumBitisCanvas");
-        Canvas canvas = bitisCanvas.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 120;
-
-        CanvasScaler scaler = bitisCanvas.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920, 1080);
-        bitisCanvas.AddComponent<GraphicRaycaster>();
-
-        GameObject perde = PanelYap("Perde", bitisCanvas.transform, new Color(0.02f, 0.02f, 0.04f, 0.86f));
-        TamEkran(perde.GetComponent<RectTransform>());
-
-        GameObject cerceve = PanelYap("Cerceve", perde.transform, new Color(0.88f, 0.72f, 0.34f, 0.95f));
-        cerceve.GetComponent<RectTransform>().sizeDelta = new Vector2(646f, 476f);
-
-        GameObject kart = PanelYap("Kart", cerceve.transform, new Color(0.07f, 0.08f, 0.12f, 0.98f));
-        kart.GetComponent<RectTransform>().sizeDelta = new Vector2(640f, 470f);
-
-        Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        bool en = IngilizceMi();
-
-        int gecenSaniye = Mathf.Max(1, Mathf.RoundToInt(Time.time - baslangicZamani));
-        int dk = gecenSaniye / 60;
-        int sn = gecenSaniye % 60;
-        int erdemSayisi = AnlatimNesnesi.BulunanErdemSayisi;
-
-        string ustEtiket = en ? $"THRESHOLD {bolumNo} CROSSED" : $"{bolumNo}. EŞİK AŞILDI";
-        string anaBaslik = en ? "CHAPTER COMPLETED" : "BÖLÜM TAMAMLANDI";
-        string ozetMetin = en
-            ? $"Elapsed Time: {dk:00}:{sn:00}   •   Hidden Virtues: {erdemSayisi} / 7"
-            : $"Geçen Süre: {dk:00}:{sn:00}   •   Bulunan Erdem: {erdemSayisi} / 7";
-
-        Text tUst = MetinYap("Ust", kart.transform, font, ustEtiket, 17, FontStyle.Bold, new Color(0.90f, 0.74f, 0.34f));
-        tUst.GetComponent<RectTransform>().anchoredPosition = new Vector2(0f, 175f);
-        tUst.GetComponent<RectTransform>().sizeDelta = new Vector2(560f, 34f);
-
-        Text tBaslik = MetinYap("Baslik", kart.transform, font, anaBaslik, 34, FontStyle.Bold, new Color(0.96f, 0.94f, 0.88f));
-        tBaslik.GetComponent<RectTransform>().anchoredPosition = new Vector2(0f, 125f);
-        tBaslik.GetComponent<RectTransform>().sizeDelta = new Vector2(560f, 52f);
-
-        Text tOzet = MetinYap("Ozet", kart.transform, font, ozetMetin, 20, FontStyle.Normal, new Color(0.78f, 0.82f, 0.88f));
-        tOzet.GetComponent<RectTransform>().anchoredPosition = new Vector2(0f, 65f);
-        tOzet.GetComponent<RectTransform>().sizeDelta = new Vector2(560f, 40f);
-
-        int aktifIndex = SceneManager.GetActiveScene().buildIndex;
-        bool sonrakiVar = (aktifIndex + 1) < SceneManager.sceneCountInBuildSettings;
-
-        string sonrakiEtiket = sonrakiVar
-            ? (en ? "NEXT CHAPTER" : "SONRAKİ BÖLÜM")
-            : (en ? "NEXT CHAPTER (SOON — REPLAY)" : "SONRAKİ BÖLÜM (YAKINDA — TEKRAR OYNA)");
-
-        ButonYap("SonrakiBtn", kart.transform, font, sonrakiEtiket, new Vector2(0f, -15f), new Color(0.18f, 0.54f, 0.40f), SonrakiBolumeGec);
-        ButonYap("TekrarBtn", kart.transform, font, en ? "REPLAY CHAPTER" : "BÖLÜMÜ TEKRAR OYNA", new Vector2(0f, -92f), new Color(0.24f, 0.27f, 0.36f), () =>
-        {
-            Time.timeScale = 1f;
-            SceneManager.LoadScene(aktifIndex);
-        });
-        ButonYap("MenuBtn", kart.transform, font, en ? "MAIN MENU" : "ANA MENÜYE DÖN", new Vector2(0f, -169f), new Color(0.38f, 0.18f, 0.22f), () =>
-        {
-            Time.timeScale = 1f;
-            SceneManager.LoadScene(0);
-        });
+        yield return new WaitForSeconds(2.8f);
+        if (tamamlandi) SonrakiSahneyeGec();
     }
 
-    private void SonrakiBolumeGec()
+    private void SonrakiSahneyeGec()
     {
-        Time.timeScale = 1f;
-        int aktifIndex = SceneManager.GetActiveScene().buildIndex;
-        if (aktifIndex + 1 < SceneManager.sceneCountInBuildSettings)
+        if (bolumNo < 7)
         {
-            SceneManager.LoadScene(aktifIndex + 1);
+            string hedefSahne = "Bolum" + (bolumNo + 1);
+            if (Application.CanStreamedLevelBeLoaded(hedefSahne))
+            {
+                SceneManager.LoadScene(hedefSahne);
+                return;
+            }
+        }
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+    }
+
+    private void OnGUI()
+    {
+        if (!tamamlandi) return;
+
+        bool ingilizce = PlayerPrefs.GetString("Dil", "TR") == "EN";
+        int idx = Mathf.Clamp(bolumNo - 1, 0, 6);
+        string gunah = ingilizce ? GunahAdlariEn[idx] : GunahAdlariTr[idx];
+
+        Color eskiRenk = GUI.color;
+        GUI.color = gizliSonAktif
+            ? new Color(0.96f, 0.93f, 0.84f, 0.94f)
+            : new Color(0.04f, 0.05f, 0.08f, 0.90f);
+        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+        GUI.color = eskiRenk;
+
+        GUIStyle baslikStil = new GUIStyle(GUI.skin.label);
+        baslikStil.alignment = TextAnchor.MiddleCenter;
+        baslikStil.fontSize = 32;
+        baslikStil.fontStyle = FontStyle.Bold;
+        baslikStil.normal.textColor = gizliSonAktif ? new Color(0.24f, 0.18f, 0.08f, 1f) : new Color(0.95f, 0.80f, 0.42f, 1f);
+
+        GUIStyle altStil = new GUIStyle(GUI.skin.label);
+        altStil.alignment = TextAnchor.MiddleCenter;
+        altStil.fontSize = 18;
+        altStil.wordWrap = true;
+        altStil.normal.textColor = gizliSonAktif ? new Color(0.18f, 0.16f, 0.14f, 1f) : new Color(0.88f, 0.90f, 0.94f, 1f);
+
+        string baslik;
+        string aciklama;
+        string devamNotu;
+
+        if (bolumNo >= 7 && gizliSonAktif)
+        {
+            baslik = ingilizce ? "SECRET ENDING — THE SEVEN VEILS PARTED" : "GİZLİ SON — YEDİ PERDE ARALANDI";
+            aciklama = ingilizce
+                ? "You gathered every single fragment across all seven trials. Beyond the deepest dark, she was waiting in the light."
+                : "Yedi eşikteki tüm parçaları eksiksiz topladın. En derin karanlığın ötesinde, o seni ışıkta bekliyordu.";
+            devamNotu = ingilizce ? "Press SPACE to play again" : "Yeniden oynamak için SPACE tuşuna bas";
+        }
+        else if (bolumNo >= 7)
+        {
+            baslik = ingilizce ? "THE END — BEYOND THE SHADOWS" : "SON — GÖLGELERİN ARDINDAN";
+            aciklama = ingilizce
+                ? "You crossed all seven thresholds, yet some forgotten fragments remained in the dark."
+                : "Yedi eşiği de aştın, ancak bazı unutulmuş parçalar karanlığın içinde kaldı.";
+            devamNotu = ingilizce ? "Press SPACE to restart" : "Baştan başlamak için SPACE tuşuna bas";
         }
         else
         {
-            SceneManager.LoadScene(aktifIndex);
+            baslik = ingilizce
+                ? $"VEIL {bolumNo} CLEARED — {gunah}"
+                : $"{bolumNo}. PERDE TAMAMLANDI — {gunah}";
+
+            string koleksiyonBilgi = "";
+            if (KoleksiyonYoneticisi.Ornek != null && KoleksiyonYoneticisi.Ornek.Toplam > 0)
+            {
+                koleksiyonBilgi = $"{KoleksiyonYoneticisi.Ornek.AktifEsyaAdi()}: {KoleksiyonYoneticisi.Ornek.Toplanan} / {KoleksiyonYoneticisi.Ornek.Toplam}";
+            }
+
+            bool sonrakiVar = Application.CanStreamedLevelBeLoaded("Bolum" + (bolumNo + 1));
+            aciklama = koleksiyonBilgi;
+            devamNotu = sonrakiVar
+                ? (ingilizce ? "Advancing to the next veil... (or press SPACE)" : "Sonraki perdeye geçiliyor... (veya SPACE'e bas)")
+                : (ingilizce ? "Chapter 2 is not built yet — press SPACE to replay Chapter 1" : "2. Bölüm henüz kurulmadı — 1. Bölümü tekrar oynamak için SPACE'e bas");
         }
-    }
 
-    private GameObject PanelYap(string ad, Transform parent, Color renk)
-    {
-        GameObject obj = new GameObject(ad);
-        obj.transform.SetParent(parent, false);
-        obj.AddComponent<Image>().color = renk;
-        return obj;
-    }
-
-    private Text MetinYap(string ad, Transform parent, Font font, string yazi, int boyut, FontStyle stil, Color renk)
-    {
-        GameObject obj = new GameObject(ad);
-        obj.transform.SetParent(parent, false);
-        Text txt = obj.AddComponent<Text>();
-        txt.font = font;
-        txt.text = yazi;
-        txt.fontSize = boyut;
-        txt.fontStyle = stil;
-        txt.color = renk;
-        txt.alignment = TextAnchor.MiddleCenter;
-        return txt;
-    }
-
-    private void ButonYap(string ad, Transform parent, Font font, string etiket, Vector2 pos, Color renk, UnityEngine.Events.UnityAction tikla)
-    {
-        GameObject obj = PanelYap(ad, parent, renk);
-        RectTransform rt = obj.GetComponent<RectTransform>();
-        rt.anchoredPosition = pos;
-        rt.sizeDelta = new Vector2(440f, 58f);
-
-        Button btn = obj.AddComponent<Button>();
-        btn.onClick.AddListener(() =>
-        {
-            if (SesYoneticisi.Ornek != null) SesYoneticisi.Ornek.ButonTiklaCal();
-            tikla?.Invoke();
-        });
-
-        Text txt = MetinYap("Yazi", obj.transform, font, etiket, 19, FontStyle.Bold, Color.white);
-        TamEkran(txt.GetComponent<RectTransform>());
-    }
-
-    private void TamEkran(RectTransform rt)
-    {
-        rt.anchorMin = Vector2.zero;
-        rt.anchorMax = Vector2.one;
-        rt.offsetMin = Vector2.zero;
-        rt.offsetMax = Vector2.zero;
+        float cx = Screen.width * 0.5f;
+        float cy = Screen.height * 0.5f;
+        GUI.Label(new Rect(cx - 380f, cy - 90f, 760f, 50f), baslik, baslikStil);
+        GUI.Label(new Rect(cx - 340f, cy - 25f, 680f, 65f), aciklama, altStil);
+        GUI.Label(new Rect(cx - 340f, cy + 55f, 680f, 35f), devamNotu, altStil);
     }
 }
